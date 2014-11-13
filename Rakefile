@@ -5,6 +5,33 @@ Coderwall::Application.load_tasks
 
 task default: :spec
 
+namespace :search do
+  task test: :environment do
+    Team.__elasticsearch__.client.indices.delete index: Team.index_name rescue nil
+    Team.__elasticsearch__.client.indices.create index: Team.index_name, body: { settings: Team.settings.to_hash, mappings: Team.mappings.to_hash }
+    Team.import
+
+    es = Team.__elasticsearch__.search({
+      query: {
+        multi_match: {
+          query: 'group',
+          fields: ['name']
+        }
+      },
+      size: 10000
+    }).to_a
+
+    pg = Team.where('name ilike ?', '%group%').to_a
+
+    puts "ES has #{es.count - pg.count}"
+    ap (es.map(&:name).sort) - (pg.map(&:name).sort)
+
+    puts "PG has #{pg.count - es.count}"
+    ap (pg.map(&:name).sort) - (es.map(&:name).sort)
+
+  end
+end
+
 namespace :team do
   task migrate: :environment do
     puts '--- Beginning team migration ---'
@@ -83,17 +110,17 @@ namespace :team do
         #mongo_team_locations =  mongo_team.team_locations
 
         #if mongo_team_locations.count != pg_team_locations.count
-          #puts "locations | pg:#{pg_team.id} | mongo:#{mongo_team.id}| #{mongo_team_locations.count} != #{pg_team_locations.count}"
+        #puts "locations | pg:#{pg_team.id} | mongo:#{mongo_team.id}| #{mongo_team_locations.count} != #{pg_team_locations.count}"
         #end
 
         ## Ignoring:
         ## - points_of_interest
         #pg_team.locations.each do |pg_team_location|
-          #mongo_team_location = mongo_team.team_locations.select { |tl| tl.name == pg_team_location.name }.first
+        #mongo_team_location = mongo_team.team_locations.select { |tl| tl.name == pg_team_location.name }.first
 
-          #%i(address city country description name state_code).each do |attr|
-            #neq(attr, pg_team_location, mongo_team_location, false)
-          #end
+        #%i(address city country description name state_code).each do |attr|
+        #neq(attr, pg_team_location, mongo_team_location, false)
+        #end
         #end
 
 
@@ -124,9 +151,9 @@ namespace :team do
         #puts 'JOBS'
 
         #pg_team.jobs.each do |pg_team_job|
-          #mongo_team_job = Team.where(id: pg_team_job.team_document_id.to_s).first
+        #mongo_team_job = Team.where(id: pg_team_job.team_document_id.to_s).first
 
-          #neq(:name, pg_team_job, mongo_team_job, false)
+        #neq(:name, pg_team_job, mongo_team_job, false)
         #end
 
         #puts 'FOLLOWERS'

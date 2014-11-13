@@ -1,43 +1,20 @@
-# encoding utf-8
-require 'search'
+# encodinsnowballg utf-8
+require 'elasticsearch/model'
 
 class Team < ActiveRecord::Base
+  include SearchModule
+  include LeaderboardRedisRank
+  include TeamAnalytics
+  include TeamMigration
+
   DEFAULT_HEX_BRAND        = '#343131'
   LEADERBOARD_KEY          = 'teams:leaderboard'
   FEATURED_TEAMS_CACHE_KEY = 'featured_teams_results'
   MAX_TEAM_SCORE           = 400
 
-  self.table_name = 'teams'
-
-  include SearchModule
   include TeamSearch
-  include LeaderboardRedisRank
-  include TeamAnalytics
-  include TeamMigration
 
   mount_uploader :avatar, TeamUploader
-
-  mapping team: {
-    properties: {
-      id:                 { type: 'string', index: 'not_analyzed' },
-      slug:               { type: 'string', index: 'not_analyzed' },
-      name:               { type: 'string', boost: 100, analyzer: 'snowball' },
-      score:              { type: 'float', index: 'not_analyzed' },
-      size:               { type: 'integer', index: 'not_analyzed' },
-      avatar:             { type: 'string', index: 'not_analyzed' },
-      country:            { type: 'string', boost: 50, analyzer: 'snowball' },
-      url:                { type: 'string', index: 'not_analyzed' },
-      follow_path:        { type: 'string', index: 'not_analyzed' },
-      hiring:             { type: 'boolean', index: 'not_analyzed' },
-      total_member_count: { type: 'integer', index: 'not_analyzed' },
-      completed_sections: { type: 'integer', index: 'not_analyzed' },
-      team_members:       { type: 'multi_field', fields: {
-        username:    { type: 'string', index: 'not_analyzed' },
-        profile_url: { type: 'string', index: 'not_analyzed' },
-        avatar:      { type: 'string', index: 'not_analyzed' }
-      } }
-    }
-  }
 
   scope :featured, ->{ where(premium: true, valid_jobs: true, hide_from_featured: false) }
 
@@ -137,7 +114,7 @@ class Team < ActiveRecord::Base
 
   def self.with_similar_names(name)
     name.gsub!(/ \-\./, '.*')
-    teams = Team.any_of({ :name => /#{name}.*/i }).limit(3).to_a
+    Team.where('name ilike ?', "#{name}%").limit(3).to_a
   end
 
   def self.with_completed_section(section)
@@ -727,7 +704,7 @@ class Team < ActiveRecord::Base
   end
 
   def reindex_search
-    if Rails.env.development? or Rails.env.test? or self.destroyed?
+    if %w(development test).include?(Rails.env) || self.destroyed?
       self.tire.update_index
     else
       IndexTeamJob.perform_async(id)
@@ -827,6 +804,54 @@ class Team < ActiveRecord::Base
     self.pending_join_requests.delete user.id
   end
 
+
+  include Elasticsearch::Model
+  include Elasticsearch::Model::Callbacks
+
+  #mapping team: {
+  #properties: {
+  #id:                 { type: 'string', index: 'not_analyzed' },
+  #slug:               { type: 'string', index: 'not_analyzed' },
+  #name:               { type: 'string', boost: 100, analyzer: 'snowball' },
+  #score:              { type: 'float', index: 'not_analyzed' },
+  #size:               { type: 'integer', index: 'not_analyzed' },
+  #avatar:             { type: 'string', index: 'not_analyzed' },
+  #country:            { type: 'string', boost: 50, analyzer: 'snowball' },
+  #url:                { type: 'string', index: 'not_analyzed' },
+  #follow_path:        { type: 'string', index: 'not_analyzed' },
+  #hiring:             { type: 'boolean', index: 'not_analyzed' },
+  #total_member_count: { type: 'integer', index: 'not_analyzed' },
+  #completed_sections: { type: 'integer', index: 'not_analyzed' },
+  #team_members:       { type: 'multi_field', fields: {
+  #username:    { type: 'string', index: 'not_analyzed' },
+  #profile_url: { type: 'string', index: 'not_analyzed' },
+  #avatar:      { type: 'string', index: 'not_analyzed' }
+  #} }
+  #}
+  #}
+
+  settings do
+    mappings dynamic: 'false' do
+      indexes :id,                  type: 'string', index: 'not_analyzed'
+      indexes :slug,                type: 'string', index: 'not_analyzed'
+      indexes :name,                type: 'string', boost: 100, analyzer: 'snowball'
+      indexes :core,                type: 'float', analyzer: 'snowball'
+      indexes :size,                type: 'integer', analyzer: 'snowball'
+      indexes :avatar,              type: 'string', analyzer: 'snowball'
+      indexes :country,             type: 'string', boost: 50, analyzer: 'snowball'
+      indexes :url,                 type: 'string', analyzer: 'snowball'
+      indexes :follow_path,         type: 'string', analyzer: 'snowball'
+      indexes :hiring,              type: 'boolean', analyzer: 'snowball'
+      indexes :total_member_count,  type: 'integer', analyzer: 'snowball'
+      indexes :completed_sections,  type: 'integer', analyzer: 'snowball'
+      #indexes :team_members do #,        type: 'multi_field', fields:
+        #indexes :username,     type: 'string', analyzer: 'snowball'
+        #indexes :profile_url,  type: 'string', analyzer: 'snowball'
+        #indexes :avatar,       type: 'string', analyzer: 'snowball'
+      #end
+    end
+  end
+
   private
 
   def identify_visitor(visitor_name)
@@ -858,6 +883,7 @@ class Team < ActiveRecord::Base
   end
 
   def clear_cache_if_premium_team
+    Team
     Rails.cache.delete(Team::FEATURED_TEAMS_CACHE_KEY) if premium?
   end
 
