@@ -416,7 +416,7 @@ GEM
     mongoid_taggable (1.1.1)
       mongoid (>= 3)
       rake
-    moped (1.5.2)
+    moped (1.5.3)
     multi_json (1.10.1)
     multi_xml (0.5.5)
     multipart-post (1.2.0)
