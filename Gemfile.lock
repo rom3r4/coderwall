@@ -298,7 +298,7 @@ GEM
     fuubar (2.0.0.rc1)
       rspec (~> 3.0.rc1)
       ruby-progressbar (~> 1.4)
-    geocoder (1.2.4)
+    geocoder (1.6.4)
     gh (0.13.2)
       addressable
       backports
