@@ -434,7 +434,7 @@ GEM
       mini_portile (= 0.6.0)
     nokogumbo (1.1.9)
       nokogiri
-    oauth (0.4.7)
+    oauth (0.5.6)
     oauth2 (0.8.1)
       faraday (~> 0.8)
       httpauth (~> 0.1)
